@@ -116,7 +116,10 @@ async def topics(_request):
     names = dict(node.get_topic_names_and_types())
     imgs = [n for n, t in sorted(names.items())
             if t[0] in IMAGE_TYPES and not n.endswith('compressedDepth')
-            and n + '/compressed' not in names]  # le brut pèse jusqu'à 15 Mo par image
+            and n + '/compressed' not in names  # le brut pèse jusqu'à 15 Mo par image
+            and not n.startswith(('/mono_perception/', '/perception/'))  # debug AgiBot, n'émet rien
+            and not n.startswith('/camera/')  # doublon de rgbd_head_front, pilote orbbec intermittent
+            and node.count_publishers(n) > 0]
     return web.json_response(imgs, headers=CORS)
 
 
@@ -293,6 +296,6 @@ app = web.Application()
 app.add_routes([web.get('/topics', topics), web.get('/video', video),
                 web.get('/audio', audio), web.get('/drive', drive)])
 try:
-    web.run_app(app, host=HOST, port=PORT)
+    web.run_app(app, host=HOST, port=PORT, shutdown_timeout=1)  # sinon l'ancien relais vit 60 s de plus
 finally:
     rclpy.shutdown()
