@@ -1,0 +1,30 @@
+[project]
+name = "epi-detection"
+version = "0.1.0"
+requires-python = "==3.10.*"
+dependencies = [
+    "ultralytics",
+    "torch",
+    "torchvision",
+    # Les messages ROS 2 Humble (rclpy, sensor_msgs) sont compilés contre numpy 1.x.
+    "numpy<2",
+    # Librairies CUDA requises par ce torch mais absentes du Jetson : on les embarque dans le venv plutôt que de toucher au système.
+    "nvidia-cuda-cupti-cu12==12.6.*",
+    "nvidia-cudss-cu12==0.8.0.10",
+]
+
+# cudss sans ses dépendances : il réutilise le cuBLAS du Jetson (celui de PyPI n'est pas compilé pour Jetson).
+[[tool.uv.dependency-metadata]]
+name = "nvidia-cudss-cu12"
+version = "0.8.0.10"
+requires-dist = []
+
+# PyTorch avec GPU pour Jetson (JetPack 6, CUDA 12.6) : les roues PyPI standard n'utilisent pas le GPU du Jetson.
+[tool.uv.sources]
+torch = { index = "jetson" }
+torchvision = { index = "jetson" }
+
+[[tool.uv.index]]
+name = "jetson"
+url = "https://pypi.jetson-ai-lab.io/jp6/cu126/+simple"
+explicit = true
