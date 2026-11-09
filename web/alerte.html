@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>X2 — Alerte</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav><a href="index.html">Admin</a><a href="alerte.html" aria-current="page">Alerte</a></nav>
+  <main>
+    <div class="center" id="start-view">
+      <button class="danger big" id="start">Déclencher l'alerte</button>
+    </div>
+
+    <section id="call" hidden>
+      <p class="error" id="error"></p>
+      <img class="video" id="video" alt="caméra frontale du robot">
+      <div class="row">
+        <button class="primary" id="talk">🎤 Parler</button>
+        <button class="danger" id="hangup">Raccrocher</button>
+        <span class="muted" id="audio-status"></span>
+      </div>
+      <h2>Déplacement</h2>
+      <p class="muted">Flèches : ↑ ↓ avancer / reculer, ← → tourner. Manette : stick gauche = déplacement, stick droit = rotation. Relâcher = arrêt.</p>
+      <p id="mode"></p>
+      <p id="drive-status"></p>
+      <p id="pad" class="muted"></p>
+      <p id="cmd"></p>
+    </section>
+  </main>
+  <script type="module">
+    import { ROBOT, FRONT, playVideo } from './common.js';
+    const $ = id => document.getElementById(id);
+    const MAX_LIN = 0.5, MAX_ANG = 0.5, KEY_LIN = 0.3, KEY_ANG = 0.4;  // le relais bride aussi à 0.5
+    let ctx, audioWs, driveWs, stopVideo, timer, mic, talking = false;
+
+    $('start').onclick = () => {
+      $('start-view').hidden = true;
+      $('call').hidden = false;
+      stopVideo = playVideo(FRONT, $('video'), msg => { $('error').textContent = msg ?? ''; });
+      ctx = new AudioContext();
+      startAudio();
+      startDrive();
+    };
+
+    $('hangup').onclick = () => {
+      clearInterval(timer);
+      driveWs.close();
+      audioWs.close();
+      stopVideo();
+      mic?.getTracks().forEach(t => t.stop());
+      mic = null;
+      ctx.close();
+      setTalking(false);
+      $('call').hidden = true;
+      $('start-view').hidden = false;
+    };
+
+    // --- Audio : micro du robot -> haut-parleurs, micro du PC -> haut-parleur du robot (PCM 16 kHz)
+    function startAudio() {
+      audioWs = new WebSocket(`ws://${ROBOT}/audio`);
+      audioWs.binaryType = 'arraybuffer';
+      let playAt = 0;
+      audioWs.onmessage = e => {
+        if (typeof e.data === 'string') {
+          const m = JSON.parse(e.data);
+          if ('talk' in m) setTalking(m.talk);
+          $('audio-status').textContent = m.error ? `son : ${m.error}` : '';
+          return;
+        }
+        if ($('audio-status').textContent) $('audio-status').textContent = '';
+        if (talking) return;  // à l'alternat : sinon l'opérateur s'entend en écho via le micro du robot
+        const s = new Int16Array(e.data);
+        const buf = ctx.createBuffer(1, s.length, 16000);
+        const ch = buf.getChannelData(0);
+        for (let i = 0; i < s.length; i++) ch[i] = s[i] / 32768;
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.connect(ctx.destination);
+        const now = ctx.currentTime;
+        if (playAt < now || playAt > now + 0.5) playAt = now + 0.15;  // petit tampon, recalé si la latence dérive
+        src.start(playAt);
+        playAt += buf.duration;
+      };
+      audioWs.onclose = () => { $('audio-status').textContent = 'son : connexion au relais perdue'; };
+    }
+
+    function setTalking(on) {
+      talking = on;
+      $('talk').textContent = on ? '🔴 Couper le micro' : '🎤 Parler';
+      $('talk').className = on ? 'danger' : 'primary';
+    }
+
+    $('talk').onclick = async () => {
+      try {
+        mic ??= await startMic();
+        if (audioWs.readyState === WebSocket.OPEN) audioWs.send(JSON.stringify({ talk: !talking }));
+      } catch (e) {
+        $('audio-status').textContent = `micro : ${e.message}`;
+      }
+    };
+
+    async function startMic() {
+      if (!navigator.mediaDevices) throw new Error('ouvrir la page via http://localhost (contexte sécurisé requis)');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+      // shortcut: ScriptProcessor est déprécié mais évite un fichier AudioWorklet ; migrer si le son coupe
+      const proc = ctx.createScriptProcessor(4096, 1, 1);
+      const ratio = ctx.sampleRate / 16000;
+      proc.onaudioprocess = e => {
+        if (!talking || audioWs.readyState !== WebSocket.OPEN) return;
+        const x = e.inputBuffer.getChannelData(0);
+        const out = new Int16Array(Math.floor(x.length / ratio));
+        for (let i = 0; i < out.length; i++) {  // moyenne par fenêtre = filtre passe-bas avant sous-échantillonnage
+          const a = Math.floor(i * ratio), b = Math.floor((i + 1) * ratio);
+          let sum = 0;
+          for (let j = a; j < b; j++) sum += x[j];
+          out[i] = Math.max(-1, Math.min(1, sum / (b - a))) * 32767;
+        }
+        audioWs.send(out.buffer);
+      };
+      ctx.createMediaStreamSource(stream).connect(proc);
+      proc.connect(ctx.destination);  // sinon Chrome n'appelle pas onaudioprocess (la sortie est muette)
+      return stream;
+    }
+
+    // --- Déplacement : flèches ou manette, envoyé à 20 Hz ; le relais arrête le robot si plus rien n'arrive
+    const keys = new Set();
+    addEventListener('keydown', e => { if (e.key.startsWith('Arrow')) { keys.add(e.key); e.preventDefault(); } });
+    addEventListener('keyup', e => keys.delete(e.key));
+    addEventListener('blur', () => keys.clear());
+    const dz = v => (Math.abs(v) < 0.15 ? 0 : v);
+
+    function command() {
+      const pad = [...navigator.getGamepads()].find(p => p?.connected);
+      $('pad').textContent = pad ? `manette : ${pad.id}` : 'manette : aucune (appuyer sur un bouton pour la détecter)';
+      // shortcut: suppose le mapping "standard" de Chrome (axe 2 = stick droit X) ; vérifier sous Firefox
+      let vx = pad ? -dz(pad.axes[1]) * MAX_LIN : 0;
+      const vy = pad ? -dz(pad.axes[0]) * MAX_LIN : 0;
+      let wz = pad ? -dz(pad.axes[2]) * MAX_ANG : 0;
+      if (keys.has('ArrowUp')) vx = KEY_LIN;
+      if (keys.has('ArrowDown')) vx = -KEY_LIN;
+      if (keys.has('ArrowLeft')) wz = KEY_ANG;
+      if (keys.has('ArrowRight')) wz = -KEY_ANG;
+      return { vx, vy, wz };
+    }
+
+    function startDrive() {
+      driveWs = new WebSocket(`ws://${ROBOT}/drive`);
+      driveWs.onmessage = e => {
+        const m = JSON.parse(e.data);
+        if (m.mode) $('mode').textContent = `mode : ${m.mode}` + (m.mode === 'LOCOMOTION_DEFAULT' ? ''
+          : " — le robot ne marchera pas : le passer en mode marche (LOCOMOTION_DEFAULT)");
+        if (m.status || m.error) $('drive-status').textContent = `commande : ${m.status ?? m.error}`;
+      };
+      driveWs.onclose = () => { $('drive-status').textContent = 'commande : connexion au relais perdue'; };
+      timer = setInterval(() => {
+        const c = command();
+        $('cmd').textContent = `avant ${c.vx.toFixed(2)} m/s · latéral ${c.vy.toFixed(2)} m/s · rotation ${c.wz.toFixed(2)} rad/s`;
+        if (driveWs.readyState === WebSocket.OPEN) driveWs.send(JSON.stringify(c));
+      }, 50);
+    }
+  </script>
+</body>
+</html>

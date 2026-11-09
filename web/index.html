@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>X2 — Admin</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav><a href="index.html" aria-current="page">Admin</a><a href="alerte.html">Alerte</a></nav>
+  <main>
+    <div class="row">
+      <label for="topic">Flux vidéo</label>
+      <select id="topic"><option value="">— choisir un flux —</option></select>
+    </div>
+    <p class="error" id="error"></p>
+    <img class="video" id="video" alt="flux vidéo du robot">
+  </main>
+  <script type="module">
+    import { ROBOT, playVideo, videoError } from './common.js';
+    const select = document.getElementById('topic');
+    const img = document.getElementById('video');
+    const error = document.getElementById('error');
+    const showError = msg => { error.textContent = msg ?? ''; };
+    let stop = () => {};
+
+    try {
+      const res = await fetch(`http://${ROBOT}/topics`);
+      for (const t of await res.json()) select.add(new Option(t, t));
+    } catch (e) {
+      showError(videoError(`relais injoignable (http://${ROBOT})`));
+    }
+
+    select.onchange = () => {
+      stop();
+      showError(null);
+      stop = select.value ? playVideo(select.value, img, showError) : () => {};
+    };
+  </script>
+</body>
+</html>
