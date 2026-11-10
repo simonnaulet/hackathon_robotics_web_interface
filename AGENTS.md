@@ -13,6 +13,7 @@ Interface web opérateur pour le robot humanoïde AgiBot X2 Ultra (hackathon) : 
 
 ## Règles
 
+- Avant de travailler sur le robot, lancer `./check.sh` (5 à 20 s, ne change rien) : chaque ligne KO dit quoi faire.
 - Sur le Jetson, n'écrire que dans `~/hackathon/webui` (relais) et `~/hackathon/epi_detection` (détection). Le reste du home appartient à d'autres développeurs, une autre session agent peut travailler en parallèle.
 - Ne pas modifier ni relancer les services AgiBot (utilisateur `run` : caméras, orbbec, MC…).
 - Ne jamais faire bouger le robot pendant un test (`/drive`, `/aima/mc/locomotion/velocity`) ni changer son mode, sans accord explicite et sans quelqu'un à côté.
@@ -26,9 +27,11 @@ web/          pages servies par le PC (HTML + JS vanilla, aucune build)
   alerte.html   Alerte : caméra frontale, audio bidirectionnel, pilotage flèches / manette PS5
   common.js     adresse du relais (?robot=hôte:port pour changer), lecture d'un flux vidéo
 serve.mjs     serveur statique Node sur http://localhost:8000 (localhost requis pour micro et manette)
-run.sh        copie robot/ vers ~/hackathon/webui, relance le relais, démarre la détection si absente, puis lance serve.mjs
+run.sh        copie robot/ vers ~/hackathon/webui, relance le relais, démarre la détection si absente, lance check.sh, puis serve.mjs
+check.sh      contrôle du robot depuis le PC (lance robot/check.py sur le Jetson) ; code 0 = tout OK
 robot/        relais Python sur le Jetson (aiohttp + rclpy, Python système, sans dépendance à installer)
   relay.py      écoute 10.0.1.41:8081
+  check.py      caméras, micro (interne/DJI), relais, détection YOLO ; lecture seule. Sur le Jetson : python3 ~/hackathon/webui/check.py
   start.sh      (re)lance le relais en arrière-plan, journal dans relay.log
 detection/    copie de ~/hackathon/epi_detection (YOLO EPI, uv) ; best.pt non versionné
 ```

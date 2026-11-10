@@ -9,4 +9,5 @@ rsync -az -e 'ssh -J agi@192.168.88.88' robot/ agi@10.0.1.41:hackathon/webui/
 # Un seul detect.py à la fois (deux ont fait planter les caméras) ; "[d]" évite que pgrep se trouve lui-même.
 # Le if, et non ||, garde le & sur la seule commande redirigée : sinon la session SSH reste ouverte.
 "${JETSON[@]}" 'cd ~/hackathon/epi_detection; if ! pgrep -f "[d]etect.py" > /dev/null; then setsid nohup ./detect.sh > detect.log 2>&1 < /dev/null & fi'
+./check.sh || echo "Attention : matériel incomplet (KO ci-dessus), l'interface démarre quand même."
 node serve.mjs
