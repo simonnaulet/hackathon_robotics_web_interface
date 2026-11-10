@@ -26,7 +26,7 @@ web/          pages servies par le PC (HTML + JS vanilla, aucune build)
   alerte.html   Alerte : caméra frontale, audio bidirectionnel, pilotage flèches / manette PS5
   common.js     adresse du relais (?robot=hôte:port pour changer), lecture d'un flux vidéo
 serve.mjs     serveur statique Node sur http://localhost:8000 (localhost requis pour micro et manette)
-run.sh        copie robot/ vers ~/hackathon/webui, relance le relais, puis lance serve.mjs
+run.sh        copie robot/ vers ~/hackathon/webui, relance le relais, démarre la détection, lance serve.mjs ; Ctrl-C arrête la détection (batterie)
 robot/        relais Python sur le Jetson (aiohttp + rclpy, Python système, sans dépendance à installer)
   relay.py      écoute 10.0.1.41:8081
   start.sh      (re)lance le relais en arrière-plan, journal dans relay.log
@@ -42,7 +42,7 @@ API du relais :
 | `WS /audio` | binaire = PCM S16LE 16 kHz mono (micro robot → PC, PC → haut-parleur robot) ; texte `{"talk": bool}` pour le focus audio |
 | `WS /drive` | le client envoie `{vx, vy, wz}` à 20 Hz ; le relais publie à 50 Hz, vitesse nulle après 0,3 s sans commande, un seul pilote à la fois |
 
-Détection : `detect.py` lit la caméra frontale et publie `/hackathon/epi/detections/compressed`. Lancement sur le Jetson : `cd ~/hackathon/epi_detection && setsid nohup ./detect.sh > detect.log 2>&1 < /dev/null &`.
+Détection : `detect.py` lit la caméra frontale et publie `/hackathon/epi/detections/compressed`. Rien ne la lance au démarrage du robot : `run.sh` la démarre et l'arrête. Lancement manuel sur le Jetson : `cd ~/hackathon/epi_detection && setsid nohup ./detect.sh > detect.log 2>&1 < /dev/null &`.
 
 ## Pièges connus
 
