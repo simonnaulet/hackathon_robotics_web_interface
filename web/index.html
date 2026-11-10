@@ -17,7 +17,8 @@
     <img class="video" id="video" alt="flux vidéo du robot">
   </main>
   <script type="module">
-    import { ROBOT, playVideo, videoError } from './common.js';
+    import { ROBOT, playVideo, showLevel, videoError } from './common.js';
+    showLevel();
     const EPI = '/hackathon/epi/detections/compressed';  // publié par ~/hackathon/epi_detection/detect.py
     const select = document.getElementById('topic');
     const img = document.getElementById('video');

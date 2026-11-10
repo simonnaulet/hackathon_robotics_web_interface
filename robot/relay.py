@@ -26,6 +26,12 @@ MAX_ANG, MIN_ANG = 1.0, 0.1     # rad/s : la télécommande officielle tourne à
 DEADMAN = 0.3                   # s sans commande reçue -> vitesse nulle
 SOURCE = 'node.locomotion_velocity'  # nom de source de l'exemple officiel
 AUDIO_PKG = 'webui_relay'
+DB_OFFSET = None   # dB SPL = dBFS + DB_OFFSET, à mesurer une fois avec un sonomètre ; None = non calibré, en dBFS
+UNIT = 'dBFS' if DB_OFFSET is None else 'dB'
+LOUD = -20 if DB_OFFSET is None else 85  # seuil d'alerte ; 85 dB(A) = valeur d'action supérieure du Code du travail
+LOUD_HOLD = 2.0    # s au-dessus du seuil avant l'alerte : ignore les claquements de porte
+WINDOW = 0.5       # s par mesure de niveau
+REF_MIN = 100      # crête int16 (-50 dBFS) sur la référence haut-parleur : le robot parle, on ne mesure pas
 IMAGE_TYPES = {'sensor_msgs/msg/Image': Image, 'sensor_msgs/msg/CompressedImage': CompressedImage}
 CORS = {'Access-Control-Allow-Origin': '*'}
 
@@ -39,6 +45,21 @@ def limit(v, vmin, vmax):
 
 assert limit(0.01, .2, .5) == 0 and limit(0.1, .2, .5) == .2 and limit(-3, .2, .5) == -.5
 assert limit(float('nan'), .2, .5) == 0 and limit('1', .2, .5) == 0
+
+
+def dbfs(ss, n):
+    """Niveau RMS en dBFS d'une somme de carrés d'échantillons int16 (0 = pleine échelle)."""
+    return 10 * math.log10(max(ss / n, 1e-3) / 32768 ** 2)  # plancher : pas de log(0) sur un silence numérique
+
+
+def loud_since(since, db, speaking, now):
+    """Début de l'épisode bruyant en cours, None sous le seuil ou quand le son vient du robot lui-même."""
+    return None if speaking or db < LOUD else (now if since is None else since)
+
+
+assert round(dbfs(32768 ** 2 / 2 * 4, 4), 1) == -3.0  # sinus pleine échelle
+assert loud_since(None, LOUD + 1, False, 5) == 5 and loud_since(5, LOUD + 1, False, 9) == 5
+assert loud_since(5, LOUD - 1, False, 9) is None and loud_since(5, LOUD + 1, True, 9) is None
 
 rclpy.init()
 node = rclpy.create_node('webui_relay')
@@ -54,6 +75,21 @@ executor = SingleThreadedExecutor()
 executor.add_node(node)
 threading.Thread(target=executor.spin, daemon=True).start()
 drive_busy = False
+meter, meter_lock = {'ss': 0.0, 'n': 0, 'ref': 0.0}, threading.Lock()
+level = {'error': 'mesure du niveau sonore en cours'}
+
+
+def on_capture(msg):
+    """Callback léger : cumule l'énergie des micros et la crête de la référence haut-parleur."""
+    x = np.frombuffer(bytes(msg.data.data), '<i2').reshape(-1, msg.info.channels).astype(np.float64)
+    mic, ref = x[:, :msg.mic_channels], x[:, msg.mic_channels:]
+    with meter_lock:
+        meter['ss'] += float(np.square(mic).sum())
+        meter['n'] += mic.size
+        meter['ref'] = max(meter['ref'], float(np.abs(ref).max(initial=0)))
+
+
+node.create_subscription(AudioCapture, '/aima/hal/audio/capture', on_capture, 10)
 
 
 async def call(client, req, tries=8):
@@ -292,9 +328,44 @@ async def drive(request):
     return await serve(request, sender, on_message, cleanup)
 
 
+async def meter_loop():
+    """Toutes les WINDOW s : niveau sonore moyen, alerte après LOUD_HOLD s au-dessus du seuil."""
+    global level
+    since = None
+    while True:
+        await asyncio.sleep(WINDOW)
+        with meter_lock:
+            ss, n, ref = meter['ss'], meter['n'], meter['ref']
+            meter.update(ss=0.0, n=0, ref=0.0)
+        if not n:
+            since, level = None, {'error': 'aucun son reçu du micro du robot'}
+            continue
+        now, db, speaking = time.monotonic(), round(dbfs(ss, n) + (DB_OFFSET or 0), 1), ref > REF_MIN
+        was_loud = level.get('loud', False)
+        since = loud_since(since, db, speaking, now)
+        loud = since is not None and now - since >= LOUD_HOLD
+        if loud and not was_loud:
+            print(f'alerte bruit : {db} {UNIT} (seuil {LOUD})', flush=True)
+        level = {'db': db, 'unit': UNIT, 'threshold': LOUD, 'loud': loud, 'speaking': speaking}
+
+
+async def level_ws(request):
+    async def sender(ws):
+        while True:
+            await ws.send_json(level)
+            await asyncio.sleep(WINDOW)
+
+    return await serve(request, sender)
+
+
+async def start_meter(app):
+    app['meter'] = asyncio.create_task(meter_loop())
+
+
 app = web.Application()
+app.on_startup.append(start_meter)
 app.add_routes([web.get('/topics', topics), web.get('/video', video),
-                web.get('/audio', audio), web.get('/drive', drive)])
+                web.get('/audio', audio), web.get('/drive', drive), web.get('/level', level_ws)])
 try:
     web.run_app(app, host=HOST, port=PORT, shutdown_timeout=1)  # sinon l'ancien relais vit 60 s de plus
 finally:

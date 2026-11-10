@@ -31,7 +31,8 @@
     </section>
   </main>
   <script type="module">
-    import { ROBOT, FRONT, playVideo } from './common.js';
+    import { ROBOT, FRONT, playVideo, showLevel } from './common.js';
+    showLevel();
     const $ = id => document.getElementById(id);
     // le MC multiplie la rotation par 1.5 : sous 1 rad/s (valeur de la télécommande officielle) le robot piétine au lieu de tourner
     const MAX_LIN = 0.5, MAX_ANG = 1.0, KEY_LIN = 0.3, KEY_ANG = 1.0;  // le relais bride aussi (0.5 m/s, 1 rad/s)

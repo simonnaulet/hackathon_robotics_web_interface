@@ -41,6 +41,7 @@ API du relais :
 | `WS /video?topic=` | JPEG ≤ 960 px à 10 i/s ; texte `{"error"}` si problème ; profondeur 16UC1 colorisée |
 | `WS /audio` | binaire = PCM S16LE 16 kHz mono (micro robot → PC, PC → haut-parleur robot) ; texte `{"talk": bool}` pour le focus audio |
 | `WS /drive` | le client envoie `{vx, vy, wz}` à 20 Hz ; le relais publie à 50 Hz, vitesse nulle après 0,3 s sans commande, un seul pilote à la fois |
+| `WS /level` | `{db, unit, threshold, loud, speaking}` toutes les 0,5 s (micros 0-3, mesure ignorée quand le robot parle) ; `loud` après 2 s au-dessus du seuil ; `{"error"}` sans micro |
 
 Détection : `detect.py` lit la caméra frontale et publie `/hackathon/epi/detections/compressed`. Sans spectateur du flux, elle reste abonnée à la caméra mais ne calcule rien (GPU au repos) : la laisser tourner, car SoC2 met jusqu'à ~2 min à servir la caméra frontale à un nouvel abonné. Rien ne la lance au démarrage du robot : `run.sh` la démarre si besoin. Lancement manuel sur le Jetson : `cd ~/hackathon/epi_detection && setsid nohup ./detect.sh > detect.log 2>&1 < /dev/null &`.
 
@@ -53,3 +54,4 @@ Détection : `detect.py` lit la caméra frontale et publie `/hackathon/epi/detec
 - MC : vitesse 0 ou |v| ∈ [0,2 ; 1] m/s et |ω| ∈ [0,1 ; 1] rad/s, bridée à 0,5 m/s et 1 rad/s. La politique de marche multiplie ω par 1,5, plafonne le recul à -0,5 m/s et piétine aux faibles consignes : flèches à 1 rad/s et -0,5 m/s comme la télécommande officielle. Le robot ne marche qu'en mode `LOCOMOTION_DEFAULT`.
 - Lancement en arrière-plan par SSH : rediriger `< /dev/null`, sinon la session SSH reste bloquée.
 - Images brutes `rgb_image` jusqu'à 15 Mo : toujours passer par `/compressed`.
+- Jauge dB non calibrée : `DB_OFFSET = None` dans `relay.py`, valeurs en dBFS, seuil -20 dBFS (~ 20 dB au-dessus d'une salle animée). Calibrer avec un sonomètre (bruit rose, robot immobile) puis renseigner `DB_OFFSET` : le seuil passe à 85 dB. Mesure faussée quand le robot marche (moteurs, ventilateur).

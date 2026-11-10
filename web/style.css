@@ -16,3 +16,7 @@ button.big { font-size: 1.5rem; padding: 1.2rem 2.5rem; }
 .row { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; margin: .75rem 0; }
 .center { display: grid; place-items: center; min-height: 60vh; }
 [hidden] { display: none !important; }
+.level { margin-left: auto; display: flex; gap: .5rem; align-items: center; color: var(--muted); }
+.level meter { width: 8rem; }
+.loud { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; padding: .75rem 1rem; background: var(--danger); color: #fff; font-weight: 600; }
+.loud button { background: #fff; color: var(--danger); border-color: #fff; }
