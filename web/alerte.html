@@ -33,7 +33,8 @@
   <script type="module">
     import { ROBOT, FRONT, playVideo } from './common.js';
     const $ = id => document.getElementById(id);
-    const MAX_LIN = 0.5, MAX_ANG = 0.5, KEY_LIN = 0.3, KEY_ANG = 0.4;  // le relais bride aussi à 0.5
+    // le MC multiplie la rotation par 1.5 : sous 1 rad/s (valeur de la télécommande officielle) le robot piétine au lieu de tourner
+    const MAX_LIN = 0.5, MAX_ANG = 1.0, KEY_LIN = 0.3, KEY_ANG = 1.0;  // le relais bride aussi (0.5 m/s, 1 rad/s)
     let ctx, audioWs, driveWs, stopVideo, timer, mic, talking = false;
 
     $('start').onclick = () => {
@@ -145,7 +146,7 @@
       const vy = pad ? -dz(pad.axes[0]) * MAX_LIN : 0;
       let wz = pad ? -dz(pad.axes[2]) * MAX_ANG : 0;
       if (keys.has('ArrowUp')) vx = KEY_LIN;
-      if (keys.has('ArrowDown')) vx = -KEY_LIN;
+      if (keys.has('ArrowDown')) vx = -MAX_LIN;  // le MC plafonne le recul à -0.5 ; à -0.3 il recule mal
       if (keys.has('ArrowLeft')) wz = KEY_ANG;
       if (keys.has('ArrowRight')) wz = -KEY_ANG;
       return { vx, vy, wz };

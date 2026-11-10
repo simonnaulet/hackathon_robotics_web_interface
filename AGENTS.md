@@ -50,6 +50,6 @@ Détection : `detect.py` lit la caméra frontale et publie `/hackathon/epi/detec
 - Le pilote orbbec (rgbd, `/camera/*`) s'arrête parfois seul : `/camera/*` est masqué, utiliser `/aima/hal/sensor/rgbd_head_front/*`.
 - `MultiThreadedExecutor` perd l'audio : le relais garde un exécuteur mono-thread avec des callbacks légers, les calculs se font dans asyncio.
 - Micro interne : 6 canaux (0-3 micros, 4-5 référence haut-parleur), très faible (~-43 dBFS), amplifié côté navigateur. L'audio est à l'alternat : le son du robot est coupé quand l'opérateur parle.
-- MC : vitesse 0 ou |v| ∈ [0,2 ; 1] m/s et |ω| ∈ [0,1 ; 1] rad/s, bridée à 0,5. Le robot ne marche qu'en mode `LOCOMOTION_DEFAULT`.
+- MC : vitesse 0 ou |v| ∈ [0,2 ; 1] m/s et |ω| ∈ [0,1 ; 1] rad/s, bridée à 0,5 m/s et 1 rad/s. La politique de marche multiplie ω par 1,5, plafonne le recul à -0,5 m/s et piétine aux faibles consignes : flèches à 1 rad/s et -0,5 m/s comme la télécommande officielle. Le robot ne marche qu'en mode `LOCOMOTION_DEFAULT`.
 - Lancement en arrière-plan par SSH : rediriger `< /dev/null`, sinon la session SSH reste bloquée.
 - Images brutes `rgb_image` jusqu'à 15 Mo : toujours passer par `/compressed`.

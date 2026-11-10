@@ -22,7 +22,7 @@ from aimdk_msgs.srv import AbandonAudioFocus, GetMcAction, RequestAudioFocus, Se
 HOST, PORT = '10.0.1.41', 8081  # réseau interne du robot seulement, pas l'interface Tailscale
 FPS, MAX_W = 10, 960            # allège le wifi : 10 i/s, 960 px de large max
 MAX_LIN, MIN_LIN = 0.5, 0.2     # m/s : le MC ignore < 0.2 ; bridé à 0.5 par prudence
-MAX_ANG, MIN_ANG = 0.5, 0.1     # rad/s
+MAX_ANG, MIN_ANG = 1.0, 0.1     # rad/s : la télécommande officielle tourne à 1 ; à 0.5 le robot tourne mal sur place
 DEADMAN = 0.3                   # s sans commande reçue -> vitesse nulle
 SOURCE = 'node.locomotion_velocity'  # nom de source de l'exemple officiel
 AUDIO_PKG = 'webui_relay'
