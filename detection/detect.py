@@ -30,6 +30,10 @@ class EpiDetector(Node):
         self.get_logger().info(f"{model_path} sur {'GPU' if self.device == 0 else 'CPU'}, classes : {self.model.names}")
 
     def on_image(self, msg):
+        # Personne ne regarde : on reste abonné à la caméra (SoC2 met ~2 min à servir un nouvel abonné) sans calcul GPU.
+        if self.pub.get_subscription_count() == 0:
+            self.frames, self.t0 = 0, time.time()
+            return
         # Décodage à mi-résolution : 4x moins de travail, et YOLO réduit l'image à 640 px de toute façon.
         img = cv2.imdecode(np.frombuffer(msg.data, np.uint8), cv2.IMREAD_REDUCED_COLOR_2)
         if img is None:
@@ -46,7 +50,8 @@ class EpiDetector(Node):
 
         self.frames += 1
         if self.frames % 50 == 0:
-            fps = self.frames / (time.time() - self.t0)
+            now = time.time()
+            fps, self.t0 = 50 / (now - self.t0), now  # sur les 50 dernières images
             names = [self.model.names[int(c)] for c in result.boxes.cls]
             self.get_logger().info(f"{fps:.1f} images/s, dernière image : {names or 'rien'}")
 
